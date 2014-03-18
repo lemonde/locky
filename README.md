@@ -1,4 +1,4 @@
-# locky
+# locky [![Build Status](https://travis-ci.org/neoziro/locky.png)](https://travis-ci.org/neoziro/locky)
 
 User / resource locking system.
 
