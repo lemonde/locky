@@ -21,9 +21,6 @@ locky.unlock(resourceId, cb);
 
 // Get locker.
 locky.getLocker(resourceId, cb);
-
-// Get locked resources.
-locky.getLockedResources(userId, cb);
 ```
 
 ### new Locky(options)
@@ -63,7 +60,7 @@ function createClient() {
 }
 ```
 
-#### userAdapter
+#### unserializeUser
 
 Type: `Object`
 
@@ -71,32 +68,8 @@ Define a user adapter to serialize and unserialize user.
 
 ```js
 new Locky({
-  userAdapter: {
-    serialize: function (user) {
-      return user.id;
-    },
-    unserialize: function (id) {
-      return { id: id, type: 'user' };
-    }
-  }
-})
-```
-
-#### resourceAdapter
-
-Type: `Object`
-
-Define a resource adapter to serialize and unserialize resource.
-
-```js
-new Locky({
-  resourceAdapter: {
-    serialize: function (resource) {
-      return resource.id;
-    },
-    unserialize: function (id) {
-      return { id: id, type: 'resource' };
-    }
+  unserializeUser: function unserializeUser(id, cb) {
+    cb(null, { id: id, type: 'user' });
   }
 })
 ```
@@ -115,7 +88,7 @@ new Locky({
 
 ### locky.lock(resourceId, userId, callback)
 
-Lock a resource with a custom user.
+Lock a resource to a user.
 
 ```js
 // Lock the resource "article:23" with the user "20".
@@ -124,7 +97,7 @@ locky.lock('article:23', 20, function (err) { ... });
 
 ### locky.refresh(resourceId, callback)
 
-Refresh the lock of a resource, if the resource is not locked, do nothing.
+Refresh the lock ttl of a resource, if the resource is not locked, do nothing.
 
 ```js
 // Refresh the resource "article:23".
@@ -142,20 +115,11 @@ locky.unlock('article:23', function (err) { ... });
 
 ### locky.getLocker(resourceId, callback)
 
-Return the locker user of a resource, if the resource is not locked, return `null`.
+Return the locker of a resource, if the resource is not locked, return `null`.
 
 ```js
 // Return the locker of the resource "article:23".
 locky.getLocker('article:23', function (err, user) { ... });
-```
-
-### locky.getLockedResources(userId, callback)
-
-Return the resources locked by the user.
-
-```js
-// Return the resource locked by the user "20".
-locky.getLockedResources(20, function (err, resources) { ... });
 ```
 
 ## License
