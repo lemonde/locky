@@ -2,6 +2,12 @@
 
 User / resource locking system.
 
+## Install
+
+```
+npm install locky
+```
+
 ## Usage
 
 ```js
