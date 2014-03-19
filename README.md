@@ -16,17 +16,17 @@ var Locky = require('locky');
 // Create a new locky client.
 var locky = new Locky();
 
-// Lock a resource.
-locky.lock(resourceId, userId, cb);
+// Lock the resource 'article:12' with the user 20.
+locky.lock('article:12', 20, cb);
 
-// Refresh the lock on a resource.
-locky.refresh(resourceId, cb);
+// Refresh the lock TTL of the resource 'article:12'.
+locky.refresh('article:12', cb);
 
-// Unlock a resource.
-locky.unlock(resourceId, cb);
+// Unlock the resource 'article:12.
+locky.unlock('article:12', cb);
 
-// Get locker.
-locky.getLocker(resourceId, cb);
+// Get the locker of the resource 'article:12'.
+locky.getLocker('article:12', cb);
 ```
 
 ### new Locky(options)
@@ -126,6 +126,32 @@ Return the locker of a resource, if the resource is not locked, return `null`.
 ```js
 // Return the locker of the resource "article:23".
 locky.getLocker('article:23', function (err, user) { ... });
+```
+
+### Events
+
+#### "lock"
+
+Emitted when a resource is locked.
+
+```js
+locky.on('lock', function (resourceId, userId) { ... });
+```
+
+#### "unlock"
+
+Emitted when a resource is unlocked.
+
+```js
+locky.on('lock', function (resourceId) { ... });
+```
+
+#### "expire"
+
+Emitted when the lock on a resource has expired.
+
+```js
+locky.on('expire', function (resourceId) { ... });
 ```
 
 ## License

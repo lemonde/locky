@@ -6,7 +6,7 @@ var expect = require('chai').use(require('sinon-chai')).expect;
 var Locky = require('../lib/locky');
 
 describe('Locky', function () {
-  var createLocky;
+  var createLocky, locky;
 
   beforeEach(function () {
     createLocky = function createLocky(options) {
@@ -14,6 +14,10 @@ describe('Locky', function () {
 
       return new Locky(options);
     };
+  });
+
+  afterEach(function () {
+    if (locky) locky.close();
   });
 
   describe('constructor', function () {
@@ -54,7 +58,7 @@ describe('Locky', function () {
 
   describe('#lock', function () {
     it('should lock the user', function (done) {
-      var locky = createLocky();
+      locky = createLocky();
 
       async.series([
         function lockArticle(next) {
@@ -76,7 +80,7 @@ describe('Locky', function () {
     });
 
     it('should set the correct ttl', function (done) {
-      var locky = createLocky({ ttl: 10000 });
+      locky = createLocky({ ttl: 10000 });
 
       async.series([
         function lockArticle(next) {
@@ -91,26 +95,51 @@ describe('Locky', function () {
       ], done);
     });
 
-    it('should emit an event "lock"', function (done) {
+    it('should emit an expire event when the lock expire', function (done) {
+      this.timeout(3000);
+
       var spy = sinon.spy();
-      var locky = createLocky({ ttl: 10000 });
+      locky = createLocky({ ttl: 1000 });
+      locky.on('expire', spy);
+
+      async.series([
+        function lockArticle(next) {
+          locky.lock('article', 'john');
+          setTimeout(next, 2100);
+        },
+        function checkExpire(next) {
+          expect(spy).to.be.calledWith('article');
+          next();
+        }
+      ], done);
+    });
+
+    it('should emit a "lock" event', function (done) {
+      var spy = sinon.spy();
+      locky = createLocky({ ttl: 10000 });
       locky.on('lock', spy);
 
       async.series([
         function lockArticle(next) {
           locky.lock('article', 'john', next);
         },
-        function checkTTL(next) {
+        function checkEvent(next) {
           expect(spy).to.be.calledWith('article', 'john');
           next();
         }
       ], done);
     });
+
+    it('should work without callback', function (done) {
+      locky = createLocky();
+      locky.lock('article', 'john');
+      setTimeout(done, 40);
+    });
   });
 
   describe('#refresh', function () {
     it('should refresh the ttl of a key', function (done) {
-      var locky = createLocky({ ttl: 30000 });
+      locky = createLocky({ ttl: 30000 });
 
       async.series([
         function createLockKey(next) {
@@ -130,11 +159,42 @@ describe('Locky', function () {
         }
       ], done);
     });
+
+    it('should emit an expire event when the lock expire', function (done) {
+      this.timeout(3000);
+
+      var spy = sinon.spy();
+      locky = createLocky({ ttl: 1000 });
+      locky.on('expire', spy);
+
+      async.series([
+        function createLockKey(next) {
+          locky.redis.multi()
+          .set('lock:resource:article', 'john')
+          .expire('article', 20)
+          .exec(next);
+        },
+        function refresh(next) {
+          locky.refresh('article');
+          setTimeout(next, 2100);
+        },
+        function checkExpire(next) {
+          expect(spy).to.be.calledWith('article');
+          next();
+        }
+      ], done);
+    });
+
+    it('should work without callback', function (done) {
+      locky = createLocky();
+      locky.refresh('article');
+      setTimeout(done, 40);
+    });
   });
 
   describe('#unlock', function () {
     it('should remove the key', function (done) {
-      var locky = createLocky();
+      locky = createLocky();
 
       async.series([
         function createLockKey(next) {
@@ -151,11 +211,52 @@ describe('Locky', function () {
         }
       ], done);
     });
+
+    it('should emit a "unlock" event', function (done) {
+      var spy = sinon.spy();
+      locky = createLocky();
+      locky.on('unlock', spy);
+
+      async.series([
+        function createLockKey(next) {
+          locky.redis.set('lock:resource:article', 'john', next);
+        },
+        function unlock(next) {
+          locky.unlock('article', next);
+        },
+        function checkEvent(next) {
+          expect(spy).to.be.calledWith('article');
+          next();
+        }
+      ], done);
+    });
+
+    it('should not emit a "unlock" event if the resource is not locked', function (done) {
+      var spy = sinon.spy();
+      locky = createLocky();
+      locky.on('unlock', spy);
+
+      async.series([
+        function unlock(next) {
+          locky.unlock('article', next);
+        },
+        function checkEvent(next) {
+          expect(spy).to.not.be.called;
+          next();
+        }
+      ], done);
+    });
+
+    it('should work without callback', function (done) {
+      locky = createLocky();
+      locky.unlock('article');
+      setTimeout(done, 40);
+    });
   });
 
   describe('#getLockerId', function () {
     it('should return the locker id', function (done) {
-      var locky = createLocky();
+      locky = createLocky();
 
       async.series([
         function lockArticle(next) {
@@ -173,7 +274,7 @@ describe('Locky', function () {
 
   describe('#getLocker', function () {
     it('should return the locker', function (done) {
-      var locky = createLocky();
+      locky = createLocky();
 
       async.series([
         function lockArticle(next) {
@@ -189,7 +290,7 @@ describe('Locky', function () {
     });
 
     it('should use the user adapter', function (done) {
-      var locky = createLocky({
+      locky = createLocky({
         unserializeUser: function unserializeUser(id, cb) {
           return cb(null, { id: id });
         }
@@ -206,6 +307,22 @@ describe('Locky', function () {
           });
         }
       ], done);
+    });
+  });
+
+  describe('#close', function () {
+    beforeEach(function () {
+      locky = createLocky();
+      sinon.spy(locky.redis, 'quit');
+    });
+
+    afterEach(function () {
+      locky.redis.quit.restore();
+    });
+
+    it('should close the redis connection', function () {
+      locky.close();
+      expect(locky.redis.quit).to.be.called;
     });
   });
 });
