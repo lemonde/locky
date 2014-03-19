@@ -153,6 +153,24 @@ describe('Locky', function () {
     });
   });
 
+  describe('#getLockerId', function () {
+    it('should return the locker id', function (done) {
+      var locky = createLocky();
+
+      async.series([
+        function lockArticle(next) {
+          locky.lock('article', 'john', next);
+        },
+        function getLocker(next) {
+          locky.getLockerId('article', function (err, locker) {
+            expect(locker).to.eql('john');
+            next(err);
+          });
+        }
+      ], done);
+    });
+  });
+
   describe('#getLocker', function () {
     it('should return the locker', function (done) {
       var locky = createLocky();
