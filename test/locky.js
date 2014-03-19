@@ -90,6 +90,22 @@ describe('Locky', function () {
         }
       ], done);
     });
+
+    it('should emit an event "lock"', function (done) {
+      var spy = sinon.spy();
+      var locky = createLocky({ ttl: 10000 });
+      locky.on('lock', spy);
+
+      async.series([
+        function lockArticle(next) {
+          locky.lock('article', 'john', next);
+        },
+        function checkTTL(next) {
+          expect(spy).to.be.calledWith('article', 'john');
+          next();
+        }
+      ], done);
+    });
   });
 
   describe('#refresh', function () {
