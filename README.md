@@ -70,7 +70,7 @@ function createClient() {
 
 Type: `Object`
 
-Define a user adapter to serialize and unserialize user.
+Define a user adapter to serialize and unserialize user. For example, you can return the user from your database.
 
 ```js
 new Locky({
