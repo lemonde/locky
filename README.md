@@ -1,5 +1,5 @@
 # locky
-[![Build Status](https://img.shields.io/travis/neoziro/locky.svg)](https://travis-ci.org/neoziro/locky)
+[![Build Status](https://travis-ci.org/neoziro/locky.svg?branch=master)](https://travis-ci.org/neoziro/locky)
 [![Dependency Status](https://david-dm.org/neoziro/locky.svg?theme=shields.io)](https://david-dm.org/neoziro/locky)
 [![devDependency Status](https://david-dm.org/neoziro/locky/dev-status.svg?theme=shields.io)](https://david-dm.org/neoziro/locky#info=devDependencies)
 
@@ -40,8 +40,7 @@ Create a new locky client with some options.
 
 Type: `Object` or `Function`
 
-If you specify an **object**, the properties will be used to call `redis.createClient` method. The redis module used
-will be the Redis module installed. This project doesn't have [node_redis](https://github.com/mranney/node_redis/) module as dependency.
+If you specify an **object**, the properties will be used to call `redis.createClient` method.
 
 ```js
 new Locky({
