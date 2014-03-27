@@ -1,6 +1,9 @@
-# locky [![Build Status](https://travis-ci.org/neoziro/locky.png)](https://travis-ci.org/neoziro/locky)
+# locky
+[![Build Status](https://travis-ci.org/neoziro/locky.svg?branch=master)](https://travis-ci.org/neoziro/locky)
+[![Dependency Status](https://david-dm.org/neoziro/locky.svg?theme=shields.io)](https://david-dm.org/neoziro/locky)
+[![devDependency Status](https://david-dm.org/neoziro/locky/dev-status.svg?theme=shields.io)](https://david-dm.org/neoziro/locky#info=devDependencies)
 
-User / resource locking system.
+Resource locking system.
 
 ## Install
 
@@ -16,7 +19,7 @@ var Locky = require('locky');
 // Create a new locky client.
 var locky = new Locky();
 
-// Lock the resource 'article:12' with the user 20.
+// Lock the resource 'article:12' with the locker 20.
 locky.lock('article:12', 20, cb);
 
 // Refresh the lock TTL of the resource 'article:12'.
@@ -37,8 +40,7 @@ Create a new locky client with some options.
 
 Type: `Object` or `Function`
 
-If you specify an **object**, the properties will be used to call `redis.createClient` method. The redis module used
-will be the Redis module installed. This project doesn't have [node_redis](https://github.com/mranney/node_redis/) module as dependency.
+If you specify an **object**, the properties will be used to call `redis.createClient` method.
 
 ```js
 new Locky({
@@ -66,20 +68,6 @@ function createClient() {
 }
 ```
 
-#### unserializeUser
-
-Type: `Object`
-
-Define a user adapter to serialize and unserialize user. For example, you can return the user from your database.
-
-```js
-new Locky({
-  unserializeUser: function unserializeUser(id, cb) {
-    cb(null, { id: id, type: 'user' });
-  }
-})
-```
-
 #### ttl
 
 Type: `Number`
@@ -92,16 +80,48 @@ new Locky({
 })
 ```
 
-### locky.lock(resourceId, userId, callback)
+### locky.lock(opts, callback)
 
-Lock a resource to a user.
+Lock a resource for a locker.
+
+If the resource was already locked,
+you can't lock it but by passing `force: true`.
 
 ```js
-// Lock the resource "article:23" with the user "20".
-locky.lock('article:23', 20, function (err) { ... });
+locky.lock({
+  resource: 'article:23',
+  locker: 20,
+  force: false
+}, function (err, res) { ... });
 ```
 
-### locky.refresh(resourceId, callback)
+#### resource
+
+Type: `String` | `Number`
+
+Which resource would you like to lock.
+
+#### locker
+
+Type: `String` | `Number`
+
+Which locker should lock the resource, can by any string.
+
+#### force
+
+Type: `Boolean`
+
+Should we take a lock if it's already locked?
+
+#### callback(err, res)
+
+##### res
+
+Type: `Boolean`
+
+Was the lock successful? If so you will also get a `lock` event.
+
+### locky.refresh(resource, callback)
 
 Refresh the lock ttl of a resource, if the resource is not locked, do nothing.
 
@@ -110,7 +130,7 @@ Refresh the lock ttl of a resource, if the resource is not locked, do nothing.
 locky.refresh('article:23', function (err) { ... });
 ```
 
-### locky.unlock(resourceId, callback)
+### locky.unlock(resource, callback)
 
 Unlock a resource, if the resource is not locked, do nothing.
 
@@ -119,13 +139,13 @@ Unlock a resource, if the resource is not locked, do nothing.
 locky.unlock('article:23', function (err) { ... });
 ```
 
-### locky.getLocker(resourceId, callback)
+### locky.getLocker(resource, callback)
 
 Return the locker of a resource, if the resource is not locked, return `null`.
 
 ```js
 // Return the locker of the resource "article:23".
-locky.getLocker('article:23', function (err, user) { ... });
+locky.getLocker('article:23', function (err, locker) { ... });
 ```
 
 ### Events
@@ -135,7 +155,7 @@ locky.getLocker('article:23', function (err, user) { ... });
 Emitted when a resource is locked.
 
 ```js
-locky.on('lock', function (resourceId, userId) { ... });
+locky.on('lock', function (resource, locker) { ... });
 ```
 
 #### "unlock"
@@ -143,7 +163,7 @@ locky.on('lock', function (resourceId, userId) { ... });
 Emitted when a resource is unlocked.
 
 ```js
-locky.on('lock', function (resourceId) { ... });
+locky.on('unlock', function (resource) { ... });
 ```
 
 #### "expire"
@@ -151,7 +171,7 @@ locky.on('lock', function (resourceId) { ... });
 Emitted when the lock on a resource has expired.
 
 ```js
-locky.on('expire', function (resourceId) { ... });
+locky.on('expire', function (resource) { ... });
 ```
 
 ## License
