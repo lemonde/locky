@@ -1,6 +1,6 @@
 {
   "name": "locky",
-  "version": "0.3.1",
+  "version": "0.3.2",
   "description": "User / resource locking system.",
   "main": "index.js",
   "scripts": {
