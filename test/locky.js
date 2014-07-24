@@ -49,11 +49,15 @@ describe('Locky', function () {
           redis: {
             host: 'localhost',
             port: 6379,
-            socket_nodelay: true
+            socket_nodelay: true,
+            socket_keepalive: true
           }
         });
 
-        expect(redis.createClient).to.be.calledWith(6379, 'localhost', { socket_nodelay: true });
+        expect(redis.createClient).to.be.calledWith(6379, 'localhost', {
+          socket_nodelay: true,
+          socket_keepalive: true
+        });
       });
 
       it('should accept a function', function () {
