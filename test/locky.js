@@ -1,5 +1,4 @@
 var redis = require('then-redis');
-var async = require('async');
 var sinon = require('sinon');
 var _ = require('lodash');
 var expect = require('chai').use(require('sinon-chai')).expect;
