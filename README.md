@@ -3,7 +3,7 @@
 [![Dependency Status](https://david-dm.org/neoziro/locky.svg?theme=shields.io)](https://david-dm.org/neoziro/locky)
 [![devDependency Status](https://david-dm.org/neoziro/locky/dev-status.svg?theme=shields.io)](https://david-dm.org/neoziro/locky#info=devDependencies)
 
-Resource locking system.
+Fast resource locking system based on redis.
 
 ## Install
 
@@ -20,16 +20,16 @@ var Locky = require('locky');
 var locky = new Locky();
 
 // Lock the resource 'article:12' with the locker 20.
-locky.lock('article:12', 20, cb);
+locky.lock('article:12', 20).then(...);
 
 // Refresh the lock TTL of the resource 'article:12'.
-locky.refresh('article:12', cb);
+locky.refresh('article:12').then(...);
 
 // Unlock the resource 'article:12.
-locky.unlock('article:12', cb);
+locky.unlock('article:12').then(...);
 
 // Get the locker of the resource 'article:12'.
-locky.getLocker('article:12', cb);
+locky.getLocker('article:12').then(...);
 ```
 
 ### new Locky(options)
@@ -80,7 +80,7 @@ new Locky({
 })
 ```
 
-### locky.lock(opts, callback)
+### locky.lock(options, [callback])
 
 Lock a resource for a locker.
 
@@ -92,7 +92,9 @@ locky.lock({
   resource: 'article:23',
   locker: 20,
   force: false
-}, function (err, res) { ... });
+}).then(function (locked) {
+  console.log(locked); // true the lock has been taken
+});
 ```
 
 #### resource
@@ -113,39 +115,31 @@ Type: `Boolean`
 
 Should we take a lock if it's already locked?
 
-#### callback(err, res)
-
-##### res
-
-Type: `Boolean`
-
-Was the lock successful? If so you will also get a `lock` event.
-
-### locky.refresh(resource, callback)
+### locky.refresh(resource, [callback])
 
 Refresh the lock ttl of a resource, if the resource is not locked, do nothing.
 
 ```js
 // Refresh the resource "article:23".
-locky.refresh('article:23', function (err) { ... });
+locky.refresh('article:23').then(...);
 ```
 
-### locky.unlock(resource, callback)
+### locky.unlock(resource, [callback])
 
 Unlock a resource, if the resource is not locked, do nothing.
 
 ```js
 // Unlock the resource "article:23".
-locky.unlock('article:23', function (err) { ... });
+locky.unlock('article:23').then(...);
 ```
 
-### locky.getLocker(resource, callback)
+### locky.getLocker(resource, [callback])
 
 Return the locker of a resource, if the resource is not locked, return `null`.
 
 ```js
 // Return the locker of the resource "article:23".
-locky.getLocker('article:23', function (err, locker) { ... });
+locky.getLocker('article:23').then(...);
 ```
 
 ### Events

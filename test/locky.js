@@ -1,19 +1,21 @@
-var redis = require('redis');
+var redis = require('then-redis');
 var async = require('async');
 var sinon = require('sinon');
 var _ = require('lodash');
 var expect = require('chai').use(require('sinon-chai')).expect;
 var Locky = require('../lib/locky');
+var Promise = require('bluebird');
 
 var testRedis = redis.createClient();
 
 describe('Locky', function () {
   var createLocky, locky;
 
-  beforeEach(function(done) {
-    testRedis.keys('lock:resource*', function(err, keys) {
-      if (!keys) return done();
-      testRedis.del(keys.join(' '), done);
+  beforeEach(function () {
+    return testRedis.keys('lock:resource*')
+    .then(function (keys) {
+      if (!keys || !keys.length) return;
+      return testRedis.del(keys);
     });
   });
 
@@ -24,10 +26,9 @@ describe('Locky', function () {
     };
   });
 
-  afterEach(function (done) {
-    if (!locky) return done();
-    locky.close();
-    done();
+  afterEach(function () {
+    if (!locky) return;
+    return locky.close();
   });
 
   describe('constructor', function () {
@@ -54,7 +55,9 @@ describe('Locky', function () {
           }
         });
 
-        expect(redis.createClient).to.be.calledWith(6379, 'localhost', {
+        expect(redis.createClient).to.be.calledWith({
+          host: 'localhost',
+          port: 6379,
           socket_nodelay: true,
           socket_keepalive: true
         });
@@ -71,260 +74,188 @@ describe('Locky', function () {
   });
 
   describe('#lock', function () {
-    it('should lock the user', function (done) {
+    it('should lock the user', function () {
       locky = createLocky();
 
-      async.series([
-        function lockArticle(next) {
-          locky.lock({
-            resource: 'article1',
-            locker: 'john'
-          }, next);
-        },
-        function checkValue(next) {
-          locky.redis.get('lock:resource:article1', function (err, value) {
-            expect(value).to.equal('john');
-            next(err);
-          });
-        },
-        function checkTTL(next) {
-          locky.redis.ttl('lock:resource:article1', function (err, ttl) {
-            expect(ttl).to.equal(-1);
-            next(err);
-          });
-        }
-      ], done);
+      return locky.lock({
+        resource: 'article1',
+        locker: 'john'
+      })
+      .then(function () {
+        return locky.redis.get('lock:resource:article1').then(function (value) {
+          expect(value).to.equal('john');
+        });
+      })
+      .then(function () {
+        return locky.redis.ttl('lock:resource:article1').then(function (ttl) {
+          expect(ttl).to.equal(-1);
+        });
+      });
     });
 
-    it('should not be able to lock an already locked resource', function(done) {
+    it('should not be able to lock an already locked resource', function () {
       locky = createLocky();
 
       var locked = sinon.spy();
       locky.on('lock', locked);
 
-      locky.lock({
+      return locky.lock({
         resource: 'article2',
         locker: 'john'
-      }, function(err, res) {
-        expect(err).to.be.null;
+      }).then(function(res) {
         expect(res).to.be.true;
-        locky.lock({
+
+        return locky.lock({
           resource: 'article2',
           locker: 'john'
-        }, function(err, res) {
-          expect(locked).to.be.calledOnce;
-          expect(err).to.be.null;
-          expect(res).to.be.false;
-          done();
+        });
+      }).then(function(res) {
+        expect(locked).to.be.calledOnce;
+        expect(res).to.be.false;
+      });
+    });
+
+    it('should set the correct ttl', function () {
+      locky = createLocky({ttl: 10000});
+
+      return locky.lock({
+        resource: 'article3',
+        locker: 'john'
+      })
+      .then(function () {
+        return locky.redis.ttl('lock:resource:article3').then(function (ttl) {
+          expect(ttl).to.be.most(10);
         });
       });
     });
 
-    it('should set the correct ttl', function (done) {
-      locky = createLocky({ ttl: 10000 });
-
-      async.series([
-        function lockArticle(next) {
-          locky.lock({
-            resource: 'article3',
-            locker: 'john'
-          }, next);
-        },
-        function checkTTL(next) {
-          locky.redis.ttl('lock:resource:article3', function (err, ttl) {
-            expect(ttl).to.be.most(10);
-            next(err);
-          });
-        }
-      ], done);
-    });
-
-    it('should emit an expire event when the lock expire', function (done) {
+    it('should emit an expire event when the lock expire', function () {
       this.timeout(3000);
 
       var spy = sinon.spy();
-      locky = createLocky({ ttl: 1000 });
+      locky = createLocky({ttl: 1000});
       locky.on('expire', spy);
 
-      async.series([
-        function lockArticle(next) {
-          locky.lock({
-            resource: 'article4',
-            locker: 'john'
-          });
-          setTimeout(next, 2100);
-        },
-        function checkExpire(next) {
-          expect(spy).to.be.calledWith('article4');
-          next();
-        }
-      ], done);
+      return locky.lock({
+        resource: 'article4',
+        locker: 'john'
+      })
+      .then(function () {
+        return Promise.delay(2100);
+      })
+      .then(function () {
+        expect(spy).to.be.calledWith('article4');
+      });
     });
 
-    it('should emit a "lock" event', function (done) {
+    it('should emit a "lock" event', function () {
       var spy = sinon.spy();
-      locky = createLocky({ ttl: 10000 });
+      locky = createLocky({ttl: 10000});
       locky.on('lock', spy);
 
-      async.series([
-        function lockArticle(next) {
-          locky.lock({
-            resource: 'article5',
-            locker: 'john'
-          }, next);
-        },
-        function checkEvent(next) {
-          expect(spy).to.be.calledWith('article5', 'john');
-          next();
-        }
-      ], done);
-    });
-
-    it('should work without a callback', function (done) {
-      locky = createLocky();
-      locky.lock({
-        resource: 'article6',
+      return locky.lock({
+        resource: 'article5',
         locker: 'john'
+      })
+      .then(function () {
+        expect(spy).to.be.calledWith('article5', 'john');
       });
-      setTimeout(done, 40);
     });
   });
 
   describe('#refresh', function () {
-    it('should refresh the ttl of a key', function (done) {
-      locky = createLocky({ ttl: 30000 });
+    it('should refresh the ttl of a key', function () {
+      locky = createLocky({ttl: 30000});
 
-      async.series([
-        function createLockKey(next) {
-          locky.redis.multi()
-          .set('lock:resource:article7', 'john')
-          .expire('lock:resource:article7', 20)
-          .exec(next);
-        },
-        function refresh(next) {
-          locky.refresh('lock:resource:article7', next);
-        },
-        function checkTTL(next) {
-          locky.redis.ttl('lock:resource:article7', function (err, ttl) {
-            expect(ttl).to.be.most(30);
-            next(err);
-          });
-        }
-      ], done);
+      locky.redis.multi();
+      locky.redis.set('lock:resource:article7', 'john');
+      locky.redis.expire('lock:resource:article7', 20);
+      return locky.redis.exec()
+      .then(function () {
+        return locky.refresh('lock:resource:article7');
+      })
+      .then(function () {
+        return locky.redis.ttl('lock:resource:article7').then(function (ttl) {
+          expect(ttl).to.be.most(30);
+        });
+      });
     });
 
-    it('should emit an expire event when the lock expire', function (done) {
+    it('should emit an expire event when the lock expire', function () {
       this.timeout(3000);
 
       var spy = sinon.spy();
-      locky = createLocky({ ttl: 1000 });
+      locky = createLocky({ttl: 1000});
       locky.on('expire', spy);
 
-      async.series([
-        function createLockKey(next) {
-          locky.redis.multi()
-          .set('lock:resource:article8', 'john')
-          .expire('lock:resource:article8', 20)
-          .exec(next);
-        },
-        function refresh(next) {
-          locky.refresh('article8');
-          setTimeout(next, 2100);
-        },
-        function checkExpire(next) {
-          expect(spy).to.be.calledWith('article8');
-          next();
-        }
-      ], done);
-    });
-
-    it('should work without callback', function (done) {
-      locky = createLocky();
-      locky.refresh('article9');
-      setTimeout(done, 40);
+      locky.redis.multi();
+      locky.redis.set('lock:resource:article8', 'john');
+      locky.redis.expire('lock:resource:article8', 20);
+      return locky.redis.exec()
+      .then(function () {
+        locky.refresh('article8');
+        return Promise.delay(2100);
+      })
+      .then(function () {
+        expect(spy).to.be.calledWith('article8');
+      });
     });
   });
 
   describe('#unlock', function () {
-    it('should remove the key', function (done) {
+    it('should remove the key', function () {
       locky = createLocky();
 
-      async.series([
-        function createLockKey(next) {
-          locky.redis.set('lock:resource:article10', 'john', next);
-        },
-        function unlock(next) {
-          locky.unlock('article10', next);
-        },
-        function checkTTL(next) {
-          locky.redis.exists('lock:resource:article10', function (err, exists) {
-            expect(exists).to.equal(0);
-            next(err);
-          });
-        }
-      ], done);
+      return locky.redis.set('lock:resource:article10', 'john')
+      .then(function () {
+        return locky.unlock('article10');
+      })
+      .then(function () {
+        return locky.redis.exists('lock:resource:article10').then(function (exists) {
+          expect(exists).to.equal(0);
+        });
+      });
     });
 
-    it('should emit a "unlock" event', function (done) {
+    it('should emit a "unlock" event', function () {
       var spy = sinon.spy();
       locky = createLocky();
       locky.on('unlock', spy);
 
-      async.series([
-        function createLockKey(next) {
-          locky.redis.set('lock:resource:article11', 'john', next);
-        },
-        function unlock(next) {
-          locky.unlock('article11', next);
-        },
-        function checkEvent(next) {
-          expect(spy).to.be.calledWith('article11');
-          next();
-        }
-      ], done);
+      return locky.redis.set('lock:resource:article11', 'john')
+      .then(function () {
+        return locky.unlock('article11');
+      })
+      .then(function () {
+        expect(spy).to.be.calledWith('article11');
+      });
     });
 
-    it('should not emit a "unlock" event if the resource is not locked', function (done) {
+    it('should not emit a "unlock" event if the resource is not locked', function () {
       var spy = sinon.spy();
       locky = createLocky();
       locky.on('unlock', spy);
 
-      async.series([
-        function unlock(next) {
-          locky.unlock('article12', next);
-        },
-        function checkEvent(next) {
-          expect(spy).to.not.be.called;
-          next();
-        }
-      ], done);
-    });
-
-    it('should work without callback', function (done) {
-      locky = createLocky();
-      locky.unlock('article13');
-      setTimeout(done, 40);
+      return locky.unlock('article12')
+      .then(function () {
+        expect(spy).to.not.be.called;
+      });
     });
   });
 
   describe('#getLocker', function () {
-    it('should return the locker', function (done) {
+    it('should return the locker', function () {
       locky = createLocky();
 
-      async.series([
-        function lockArticle(next) {
-          locky.lock({
-            resource: 'article14',
-            locker: 'john'
-          }, next);
-        },
-        function getLocker(next) {
-          locky.getLocker('article14', function (err, locker) {
-            expect(locker).to.eql('john');
-            next(err);
-          });
-        }
-      ], done);
+      return locky.lock({
+        resource: 'article14',
+        locker: 'john'
+      })
+      .then(function () {
+        return locky.getLocker('article14').then(function (locker) {
+          expect(locker).to.eql('john');
+        });
+      });
     });
   });
 
@@ -334,13 +265,11 @@ describe('Locky', function () {
       sinon.spy(locky.redis, 'quit');
     });
 
-    afterEach(function () {
-      locky.redis.quit.restore();
-    });
-
     it('should close the redis connection', function () {
-      locky.close();
-      expect(locky.redis.quit).to.be.called;
+      return locky.close().then(function () {
+        expect(locky.redis.quit).to.be.called;
+        locky = null;
+      });
     });
   });
 });
