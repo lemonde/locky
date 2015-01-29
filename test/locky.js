@@ -130,10 +130,8 @@ describe('Locky', function () {
     });
 
     it('should emit an expire event when the lock expire', function () {
-      this.timeout(3000);
-
       var spy = sinon.spy();
-      locky = createLocky({ttl: 1000});
+      locky = createLocky({ttl: 100});
       locky.on('expire', spy);
 
       return locky.lock({
@@ -141,7 +139,7 @@ describe('Locky', function () {
         locker: 'john'
       })
       .then(function () {
-        return Promise.delay(2100);
+        return Promise.delay(200);
       })
       .then(function () {
         expect(spy).to.be.calledWith('article4');
@@ -182,10 +180,8 @@ describe('Locky', function () {
     });
 
     it('should emit an expire event when the lock expire', function () {
-      this.timeout(3000);
-
       var spy = sinon.spy();
-      locky = createLocky({ttl: 1000});
+      locky = createLocky({ttl: 100});
       locky.on('expire', spy);
 
       locky.redis.multi();
@@ -194,7 +190,7 @@ describe('Locky', function () {
       return locky.redis.exec()
       .then(function () {
         locky.refresh('article8');
-        return Promise.delay(2100);
+        return Promise.delay(200);
       })
       .then(function () {
         expect(spy).to.be.calledWith('article8');
@@ -237,6 +233,26 @@ describe('Locky', function () {
       locky.on('unlock', spy);
 
       return locky.unlock('article12')
+      .then(function () {
+        expect(spy).to.not.be.called;
+      });
+    });
+
+    it('should not expire if we "unlock"', function () {
+      var spy = sinon.spy();
+      locky = createLocky({ttl: 100});
+      locky.on('expire', spy);
+
+      return locky.lock({
+        resource: 'article13',
+        locker: 'john'
+      })
+      .then(function () {
+        return locky.unlock('article13');
+      })
+      .then(function () {
+        return Promise.delay(200);
+      })
       .then(function () {
         expect(spy).to.not.be.called;
       });
