@@ -27,7 +27,6 @@
     "sinon-chai": "^2.6.0"
   },
   "dependencies": {
-    "bluebird": "^2.9.3",
     "lodash": "^3.0.0",
     "pipe-event": "^0.1.0",
     "promise-nodeify": "^0.1.0",
