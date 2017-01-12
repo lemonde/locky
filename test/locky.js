@@ -274,6 +274,43 @@ describe('Locky', function () {
     });
   });
 
+  describe('#getLockers', function () {
+    it('should return the lockers', function () {
+      locky = createLocky();
+
+      return locky.lock({
+        resource: 'article14',
+        locker: 'john'
+      })
+      .then(function () {
+        return locky.lock({
+          resource: 'article15',
+          locker: 'marc'
+        });
+      })
+      .then(function () {
+        return locky.lock({
+          resource: 'article16',
+          locker: 'kevin'
+        });
+      })
+      .then(function () {
+        return locky.getLockers([
+          'article14',
+          'article15',
+          'article16'
+        ]);
+      })
+      .then(function (lockers) {
+        expect(lockers).to.eql([
+          'john',
+          'marc',
+          'kevin'
+        ]);
+      });
+    });
+  });
+
   describe('#close', function () {
     beforeEach(function () {
       locky = createLocky();
