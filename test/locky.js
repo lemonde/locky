@@ -91,6 +91,40 @@ describe('Locky', () => {
       });
     });
 
+    it('should lock many users', () => {
+      locky = createLocky();
+
+      return locky.lock({
+        bulk: [{
+          resource: 'article1',
+          locker: 'john'
+        }, {
+          resource: 'article10',
+          locker: 'marc'
+        }]
+      })
+      .then(() => {
+        return locky.redis.get('lock:resource:article1').then((value) => {
+          expect(value).to.equal('john');
+        });
+      })
+      .then(() => {
+        return locky.redis.get('lock:resource:article10').then((value) => {
+          expect(value).to.equal('marc');
+        });
+      })
+      .then(() => {
+        return locky.redis.ttl('lock:resource:article1').then((ttl) => {
+          expect(ttl).to.equal(-1);
+        });
+      })
+      .then(() => {
+        return locky.redis.ttl('lock:resource:article10').then((ttl) => {
+          expect(ttl).to.equal(-1);
+        });
+      });
+    });
+
     it('should not be able to lock an already locked resource', () => {
       locky = createLocky();
 
@@ -109,6 +143,43 @@ describe('Locky', () => {
         });
       }).then((res) => {
         expect(locked).to.be.calledOnce;
+        expect(res).to.be.false;
+      });
+    });
+
+    it('should not be able to lock an already locked resource inside bulk', () => {
+      locky = createLocky();
+
+      const locked = sinon.spy();
+      locky.on('lock', locked);
+
+      return locky.lock({
+        resource: 'article2',
+        locker: 'john'
+      })
+      .then(() => {
+        return locky.lock({
+          bulk: [{
+            resource: 'article1',
+            locker: 'john'
+          }, {
+            resource: 'article2',
+            locker: 'marc'
+          }, {
+            resource: 'article20',
+            locker: 'tandy'
+          }]
+        });
+      })
+      .then((res) => {
+        expect(res).to.be.true;
+
+        return locky.lock({
+          resource: 'article2',
+          locker: 'john'
+        });
+      }).then((res) => {
+        expect(locked).to.be.calledThrice;
         expect(res).to.be.false;
       });
     });
@@ -198,6 +269,53 @@ describe('Locky', () => {
         expect(spy).to.be.calledWith('article8');
       });
     });
+
+    it('should refresh the ttl of all keys', () => {
+      locky = createLocky({ttl: 30000});
+
+      locky.redis.multi();
+      locky.redis.set('lock:resource:article7', 'john');
+      locky.redis.expire('lock:resource:article7', 20);
+      locky.redis.set('lock:resource:article17', 'marc');
+      locky.redis.expire('lock:resource:article17', 20);
+      return locky.redis.exec()
+      .then(() => {
+        return locky.refresh(['lock:resource:article7', 'lock:resource:article17']);
+      })
+      .then(() => {
+        return locky.redis.ttl('lock:resource:article7').then(function (ttl) {
+          expect(ttl).to.be.most(30);
+        });
+      })
+      .then(() => {
+        return locky.redis.ttl('lock:resource:article17').then(function (ttl) {
+          expect(ttl).to.be.most(30);
+        });
+      });
+    });
+
+    it('should emit an expire event when the locks expire', () => {
+      const spy = sinon.spy();
+      locky = createLocky({ttl: 100});
+      locky.on('expire', spy);
+
+      locky.redis.multi();
+      locky.redis.set('lock:resource:article8', 'john');
+      locky.redis.expire('lock:resource:article8', 20);
+      locky.redis.set('lock:resource:article18', 'marc');
+      locky.redis.expire('lock:resource:article18', 20);
+      return locky.redis.exec()
+      .then(() => {
+        locky.refresh(['article8', 'article18']);
+        return new Promise(resolve => {
+          setTimeout(() => resolve(true), 200);
+        });
+      })
+      .then(() => {
+        expect(spy).to.be.calledWith('article8');
+        expect(spy).to.be.calledWith('article18');
+      });
+    });
   });
 
   describe('#unlock', () => {
@@ -277,9 +395,7 @@ describe('Locky', () => {
         });
       });
     });
-  });
 
-  describe('#getLockers', () => {
     it('should return the lockers', () => {
       locky = createLocky();
 
@@ -300,16 +416,28 @@ describe('Locky', () => {
         });
       })
       .then(() => {
-        return locky.getLockers([
+        return locky.lock({
+          resource: 'article17',
+          locker: 'kevin'
+        });
+      })
+      .then(() => {
+        return locky.getLocker([
           'article14',
+          null,
           'article15',
-          'article16'
+          'unknown',
+          'article16',
+          'article17'
         ]);
       })
       .then((lockers) => {
         expect(lockers).to.eql([
           'john',
+          null,
           'marc',
+          null,
+          'kevin',
           'kevin'
         ]);
       });
