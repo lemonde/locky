@@ -3,11 +3,20 @@ const readFileSync = require('fs').readFileSync;
 const execSync = require('child_process').execSync;
 const prompt = require('readline-sync').question;
 
-const exec = (command) =>
-  execSync(command, { stdio: 'inherit' });
+const exec = (command) => execSync(command, { stdio: 'inherit' });
 
-const getPackageVersion = () =>
-  JSON.parse(readFileSync(resolvePath(__dirname, '../package.json'))).version;
+const getPackageVersion = () => {
+  let result;
+
+  try {
+    result = JSON.parse(readFileSync(resolvePath(__dirname, '../package.json'))).version;
+  } catch (err) {
+    console.error(err);
+    process.exit(1);
+  }
+
+  return result;
+};
 
 if (process.cwd() !== resolvePath(__dirname, '..')) {
   console.error('The release script must be run from the repo root');
