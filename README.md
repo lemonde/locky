@@ -5,6 +5,10 @@
 
 Fast resource locking system based on redis.
 
+## Requirements
+
+Latest requires ES6 (node >= v4).
+
 ## Install
 
 ```
