@@ -290,4 +290,26 @@ describe('Locky', () => {
       });
     });
   });
+
+  describe('#callback', () => {
+    beforeEach(() => {
+      locky = createLocky();
+    });
+
+    it('should work with callback', (done) => {
+      locky.lock({ resource: 'article1', locker: 'user1' }, done);
+    });
+
+    it('should catch error with callback', (done) => {
+      const error = new Error('hello');
+
+      sinon.stub(locky.redis, 'setnx')
+      .returns(Promise.reject(error));
+
+      locky.lock({ resource: 'article1', locker: 'user1' }, (err) => {
+        expect(err).to.equal(error);
+        done();
+      });
+    });
+  });
 });
