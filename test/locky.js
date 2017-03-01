@@ -3,7 +3,6 @@ var sinon = require('sinon');
 var _ = require('lodash');
 var expect = require('chai').use(require('sinon-chai')).expect;
 var Locky = require('../lib/locky');
-var Promise = require('bluebird');
 
 var testRedis = redis.createClient();
 
@@ -138,7 +137,9 @@ describe('Locky', function () {
         locker: 'john'
       })
       .then(function () {
-        return Promise.delay(200);
+        return new Promise(resolve => {
+          setTimeout(() => resolve(true), 200);
+        });
       })
       .then(function () {
         expect(spy).to.be.calledWith('article4');
@@ -189,7 +190,9 @@ describe('Locky', function () {
       return locky.redis.exec()
       .then(function () {
         locky.refresh('article8');
-        return Promise.delay(200);
+        return new Promise(resolve => {
+          setTimeout(() => resolve(true), 200);
+        });
       })
       .then(function () {
         expect(spy).to.be.calledWith('article8');
@@ -250,7 +253,9 @@ describe('Locky', function () {
         return locky.unlock('article13');
       })
       .then(function () {
-        return Promise.delay(200);
+        return new Promise(resolve => {
+          setTimeout(() => resolve(true), 200);
+        });
       })
       .then(function () {
         expect(spy).to.not.be.called;
