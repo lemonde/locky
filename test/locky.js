@@ -1,6 +1,7 @@
-const redis = require('then-redis');
+const redis = require('redis');
 const sinon = require('sinon');
 const _ = require('lodash');
+const async = require('async');
 const expect = require('chai').use(require('sinon-chai')).expect;
 const Locky = require('../lib/locky');
 
@@ -10,13 +11,11 @@ describe('Locky', () => {
   let createLocky, locky;
 
   beforeEach((done) => {
-    testRedis.keys('lock:resource*')
-    .then((keys) => {
-      if (! keys || ! keys.length) return Promise.resolve();
-      return testRedis.del(keys);
-    })
-    .then(() => done())
-    .catch(done);
+    testRedis.keys('lock:resource*', (err, keys) => {
+      if (err) return done(err);
+      if (! keys || ! keys.length) return done();
+      return testRedis.del(keys, done);
+    });
   });
 
   beforeEach(() => {
@@ -26,9 +25,9 @@ describe('Locky', () => {
     };
   });
 
-  afterEach(() => {
-    if (! locky) return;
-    return locky.close();
+  after((done) => {
+    if (! locky) return done();
+    locky.close(done);
   });
 
   describe('constructor', () => {
@@ -72,206 +71,234 @@ describe('Locky', () => {
   });
 
   describe('#lock', () => {
-    it('should lock the user', () => {
+    it('should lock the user', (done) => {
       locky = createLocky();
 
-      return locky.lock({
-        resource: 'article1',
-        locker: 'john'
-      })
-      .then(() => {
-        return locky.redis.get('lock:resource:article1').then((value) => {
-          expect(value).to.equal('john');
-        });
-      })
-      .then(() => {
-        return locky.redis.ttl('lock:resource:article1').then((ttl) => {
-          expect(ttl).to.equal(-1);
-        });
+      async.waterfall([
+        (callback) => (
+          locky.lock({
+            resource: 'article1',
+            locker: 'john'
+          }, callback)
+        ),
+        (success, callback) => {
+          expect(success).to.be.true;
+          locky.redis.get('lock:resource:article1', callback);
+        },
+        (result, callback) => {
+          expect(result).to.equal('john');
+          locky.redis.ttl('lock:resource:article1', callback);
+        }
+      ], (err, ttl) => {
+        if (err) return done(err);
+        expect(ttl).to.equal(-1);
+        done();
       });
     });
 
-    it('should not be able to lock an already locked resource', () => {
+    it('should not be able to lock an already locked resource', (done) => {
       locky = createLocky();
 
       const locked = sinon.spy();
       locky.on('lock', locked);
 
-      return locky.lock({
-        resource: 'article2',
-        locker: 'john'
-      }).then((res) => {
-        expect(res).to.be.true;
-
-        return locky.lock({
-          resource: 'article2',
-          locker: 'john'
-        });
-      }).then((res) => {
+      async.waterfall([
+        (callback) => (
+          locky.lock({
+            resource: 'article2',
+            locker: 'john'
+          }, callback)
+        ),
+        (success, callback) => {
+          expect(success).to.be.true;
+          locky.lock({
+            resource: 'article2',
+            locker: 'john'
+          }, callback);
+        }
+      ], (err, result) => {
+        if (err) return done(err);
         expect(locked).to.be.calledOnce;
-        expect(res).to.be.false;
+        expect(result).to.be.false;
+        done();
       });
     });
 
-    it('should set the correct ttl', () => {
-      locky = createLocky({ttl: 10000});
+    it('should set the correct ttl', (done) => {
+      locky = createLocky({ ttl: 10000 });
 
-      return locky.lock({
-        resource: 'article3',
-        locker: 'john'
-      })
-      .then(() => {
-        return locky.redis.ttl('lock:resource:article3').then((ttl) => {
-          expect(ttl).to.be.most(10);
-        });
+      async.waterfall([
+        (callback) => (
+          locky.lock({
+            resource: 'article3',
+            locker: 'john'
+          }, callback)
+        ),
+        (success, callback) => {
+          locky.redis.ttl('lock:resource:article3', callback);
+        }
+      ], (err, ttl) => {
+        if (err) return done(err);
+        expect(ttl).to.be.most(10);
+        done();
       });
     });
 
-    it('should emit an expire event when the lock expire', () => {
+    it('should emit an expire event when the lock expire', (done) => {
       const spy = sinon.spy();
-      locky = createLocky({ttl: 100});
+      locky = createLocky({ ttl: 100 });
       locky.on('expire', spy);
 
-      return locky.lock({
-        resource: 'article4',
-        locker: 'john'
-      })
-      .then(() => {
-        return new Promise(resolve => {
-          setTimeout(() => resolve(true), 200);
-        });
-      })
-      .then(() => {
+      async.waterfall([
+        (callback) => (
+          locky.lock({
+            resource: 'article4',
+            locker: 'john'
+          }, callback)
+        ),
+        (success, callback) => setTimeout(() => callback(), 200)
+      ], (err) => {
+        if (err) return done(err);
         expect(spy).to.be.calledWith('article4');
+        done();
       });
     });
 
-    it('should emit a "lock" event', () => {
+    it('should emit a "lock" event', (done) => {
       const spy = sinon.spy();
-      locky = createLocky({ttl: 10000});
+      locky = createLocky({ ttl: 10000 });
       locky.on('lock', spy);
 
-      return locky.lock({
+      locky.lock({
         resource: 'article5',
         locker: 'john'
-      })
-      .then(() => {
+      }, (err) => {
+        if (err) return done(err);
         expect(spy).to.be.calledWith('article5', 'john');
+        done();
       });
     });
   });
 
   describe('#refresh', () => {
-    it('should refresh the ttl of a key', () => {
-      locky = createLocky({ttl: 30000});
+    it('should refresh the ttl of a key', (done) => {
+      locky = createLocky({ ttl: 30000 });
 
-      locky.redis.multi();
-      locky.redis.set('lock:resource:article7', 'john');
-      locky.redis.expire('lock:resource:article7', 20);
-      return locky.redis.exec()
-      .then(() => locky.refresh('lock:resource:article7'))
-      .then(() => {
-        return locky.redis.ttl('lock:resource:article7').then((ttl) => {
-          expect(ttl).to.be.most(30);
-        });
+      const multi = locky.redis.multi();
+      multi.set('lock:resource:article7', 'john');
+      multi.expire('lock:resource:article7', 20);
+
+      async.waterfall([
+        (callback) => multi.exec(callback),
+        (results, callback) => locky.redis.ttl('lock:resource:article7', callback)
+      ], (err, ttl) => {
+        if (err) return done(err);
+        expect(ttl).to.be.most(30);
+        done();
       });
     });
 
-    it('should emit an expire event when the lock expire', () => {
+    it('should emit an expire event when the lock expire', (done) => {
       const spy = sinon.spy();
-      locky = createLocky({ttl: 100});
+      locky = createLocky({ ttl: 100 });
       locky.on('expire', spy);
 
-      locky.redis.multi();
-      locky.redis.set('lock:resource:article8', 'john');
-      locky.redis.expire('lock:resource:article8', 20);
-      return locky.redis.exec()
-      .then(() => {
-        locky.refresh('article8');
+      const multi = locky.redis.multi();
+      multi.set('lock:resource:article8', 'john');
+      multi.expire('lock:resource:article8', 20);
 
-        return new Promise(resolve => {
-          setTimeout(() => resolve(true), 200);
-        });
-      })
-      .then(() => {
+      async.waterfall([
+        (callback) => multi.exec(callback),
+        (results, callback) => locky.refresh('article8', callback),
+        (callback) => setTimeout(() => callback(), 200),
+      ], (err) => {
+        if (err) return done(err);
         expect(spy).to.be.calledWith('article8');
+        done();
       });
     });
   });
 
   describe('#unlock', () => {
-    it('should remove the key', () => {
+    it('should remove the key', (done) => {
       locky = createLocky();
 
-      return locky.redis.set('lock:resource:article10', 'john')
-      .then(() => locky.unlock('article10'))
-      .then(() => {
-        return locky.redis.exists('lock:resource:article10')
-        .then((exists) => {
-          expect(exists).to.equal(0);
-        });
+      async.waterfall([
+        (callback) => locky.redis.set('lock:resource:article10', 'john', callback),
+        (result, callback) => locky.unlock('article10', callback),
+        (callback) => locky.redis.exists('lock:resource:article10', callback)
+      ], (err, exists) => {
+        if (err) return done(err);
+        expect(exists).to.equal(0);
+        done();
       });
     });
 
-    it('should emit a "unlock" event', () => {
+    it('should emit a "unlock" event', (done) => {
       const spy = sinon.spy();
       locky = createLocky();
       locky.on('unlock', spy);
 
-      return locky.redis.set('lock:resource:article11', 'john')
-      .then(() => locky.unlock('article11'))
-      .then(() => {
+      async.waterfall([
+        (callback) => locky.redis.set('lock:resource:article11', 'john', callback),
+        (result, callback) => locky.unlock('article11', callback)
+      ], (err) => {
+        if (err) return done(err);
         expect(spy).to.be.calledWith('article11');
+        done();
       });
     });
 
-    it('should not emit a "unlock" event if the resource is not locked', () => {
+    it('should not emit a "unlock" event if the resource is not locked', (done) => {
       const spy = sinon.spy();
       locky = createLocky();
       locky.on('unlock', spy);
 
-      return locky
-      .unlock('article12')
-      .then(() => {
+      locky.unlock('article12', (err) => {
+        if (err) return done(err);
         expect(spy).to.not.be.called;
+        done();
       });
     });
 
-    it('should not expire if we "unlock"', () => {
+    it('should not expire if we "unlock"', (done) => {
       const spy = sinon.spy();
-      locky = createLocky({ttl: 100});
+      locky = createLocky({ ttl: 100 });
       locky.on('expire', spy);
 
-      return locky.lock({
-        resource: 'article13',
-        locker: 'john'
-      })
-      .then(() => locky.unlock('article13'))
-      .then(() => {
-        return new Promise(resolve => {
-          setTimeout(() => resolve(true), 200);
-        });
-      })
-      .then(() => {
+      async.waterfall([
+        (callback) => (
+          locky.lock({
+            resource: 'article13',
+            locker: 'john'
+          }, callback)
+        ),
+        (success, callback) => locky.unlock('article13', callback),
+        (callback) => setTimeout(() => callback(), 200)
+      ], (err) => {
+        if (err) return done(err);
         expect(spy).to.not.be.called;
+        done();
       });
     });
   });
 
   describe('#getLocker', () => {
-    it('should return the locker', () => {
+    it('should return the locker', (done) => {
       locky = createLocky();
 
-      return locky
-      .lock({
-        resource: 'article14',
-        locker: 'john'
-      })
-      .then(() => {
-        return locky.getLocker('article14')
-        .then(function (locker) {
-          expect(locker).to.eql('john');
-        });
+      async.waterfall([
+        (callback) => (
+          locky.lock({
+            resource: 'article14',
+            locker: 'john'
+          }, callback)
+        ),
+        (success, callback) => locky.getLocker('article14', callback)
+      ], (err, locker) => {
+        if (err) return done(err);
+        expect(locker).to.eql('john');
+        done();
       });
     });
   });
@@ -282,32 +309,11 @@ describe('Locky', () => {
       sinon.spy(locky.redis, 'quit');
     });
 
-    it('should close the redis connection', () => {
-      return locky.close()
-      .then(() => {
+    it('should close the redis connection', (done) => {
+      locky.close((err) => {
+        if (err) return done(err);
         expect(locky.redis.quit).to.be.called;
         locky = null;
-      });
-    });
-  });
-
-  describe('#callback', () => {
-    beforeEach(() => {
-      locky = createLocky();
-    });
-
-    it('should work with callback', (done) => {
-      locky.lock({ resource: 'article1', locker: 'user1' }, done);
-    });
-
-    it('should catch error with callback', (done) => {
-      const error = new Error('hello');
-
-      sinon.stub(locky.redis, 'setnx')
-      .returns(Promise.reject(error));
-
-      locky.lock({ resource: 'article1', locker: 'user1' }, (err) => {
-        expect(err).to.equal(error);
         done();
       });
     });
