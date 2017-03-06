@@ -10,11 +10,12 @@ describe('Locky', () => {
   let createLocky, locky;
 
   beforeEach((done) => {
-    testRedis.keys('lock:resource*')
+    testRedis.smembers('locky:current:locks')
     .then((keys) => {
       if (! keys || ! keys.length) return Promise.resolve();
       return testRedis.del(keys);
     })
+    .then(() => testRedis.del('locky:current:locks'))
     .then(() => done())
     .catch(done);
   });
@@ -114,7 +115,7 @@ describe('Locky', () => {
     });
 
     it('should set the correct ttl', () => {
-      locky = createLocky({ttl: 10000});
+      locky = createLocky({ ttl: 10000 });
 
       return locky.lock({
         resource: 'article3',
@@ -129,7 +130,7 @@ describe('Locky', () => {
 
     it('should emit an expire event when the lock expire', () => {
       const spy = sinon.spy();
-      locky = createLocky({ttl: 100});
+      locky = createLocky({ ttl: 100 });
       locky.on('expire', spy);
 
       return locky.lock({
@@ -148,7 +149,7 @@ describe('Locky', () => {
 
     it('should emit a "lock" event', () => {
       const spy = sinon.spy();
-      locky = createLocky({ttl: 10000});
+      locky = createLocky({ ttl: 10000 });
       locky.on('lock', spy);
 
       return locky.lock({
@@ -163,7 +164,7 @@ describe('Locky', () => {
 
   describe('#refresh', () => {
     it('should refresh the ttl of a key', () => {
-      locky = createLocky({ttl: 30000});
+      locky = createLocky({ ttl: 30000 });
 
       locky.redis.multi();
       locky.redis.set('lock:resource:article7', 'john');
@@ -179,11 +180,12 @@ describe('Locky', () => {
 
     it('should emit an expire event when the lock expire', () => {
       const spy = sinon.spy();
-      locky = createLocky({ttl: 100});
+      locky = createLocky({ ttl: 100 });
       locky.on('expire', spy);
 
       locky.redis.multi();
       locky.redis.set('lock:resource:article8', 'john');
+      locky.redis.sadd(locky.set, 'lock:resource:article8');
       locky.redis.expire('lock:resource:article8', 20);
       return locky.redis.exec()
       .then(() => {
@@ -239,7 +241,7 @@ describe('Locky', () => {
 
     it('should not expire if we "unlock"', () => {
       const spy = sinon.spy();
-      locky = createLocky({ttl: 100});
+      locky = createLocky({ ttl: 100 });
       locky.on('expire', spy);
 
       return locky.lock({
@@ -303,7 +305,7 @@ describe('Locky', () => {
     it('should catch error with callback', (done) => {
       const error = new Error('hello');
 
-      sinon.stub(locky.redis, 'setnx')
+      sinon.stub(locky.redis, 'exec')
       .returns(Promise.reject(error));
 
       locky.lock({ resource: 'article1', locker: 'user1' }, (err) => {
