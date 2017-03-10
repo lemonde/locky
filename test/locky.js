@@ -27,9 +27,9 @@ describe('Locky', () => {
     };
   });
 
-  afterEach(() => {
-    if (! locky) return;
-    return locky.close();
+  afterEach((done) => {
+    if (! locky) return done();
+    locky.close(done);
   });
 
   describe('constructor', () => {
@@ -83,11 +83,13 @@ describe('Locky', () => {
       .then(() => {
         return locky.redis.get('lock:resource:article1').then((value) => {
           expect(value).to.equal('john');
+          return true;
         });
       })
       .then(() => {
         return locky.redis.ttl('lock:resource:article1').then((ttl) => {
           expect(ttl).to.equal(-1);
+          return true;
         });
       });
     });
@@ -111,6 +113,7 @@ describe('Locky', () => {
       }).then((res) => {
         expect(locked).to.be.calledOnce;
         expect(res).to.be.false;
+        return true;
       });
     });
 
@@ -124,6 +127,7 @@ describe('Locky', () => {
       .then(() => {
         return locky.redis.ttl('lock:resource:article3').then((ttl) => {
           expect(ttl).to.be.most(10);
+          return true;
         });
       });
     });
@@ -139,11 +143,12 @@ describe('Locky', () => {
       })
       .then(() => {
         return new Promise(resolve => {
-          setTimeout(() => resolve(true), 200);
+          setTimeout(() => resolve(true), 300);
         });
       })
       .then(() => {
         expect(spy).to.be.calledWith('article4');
+        return true;
       });
     });
 
@@ -158,6 +163,7 @@ describe('Locky', () => {
       })
       .then(() => {
         expect(spy).to.be.calledWith('article5', 'john');
+        return true;
       });
     });
   });
@@ -168,12 +174,14 @@ describe('Locky', () => {
 
       locky.redis.multi();
       locky.redis.set('lock:resource:article7', 'john');
-      locky.redis.expire('lock:resource:article7', 20);
+      locky.redis.pexpire('lock:resource:article7', 20);
+
       return locky.redis.exec()
       .then(() => locky.refresh('lock:resource:article7'))
       .then(() => {
         return locky.redis.ttl('lock:resource:article7').then((ttl) => {
           expect(ttl).to.be.most(30);
+          return true;
         });
       });
     });
@@ -186,17 +194,17 @@ describe('Locky', () => {
       locky.redis.multi();
       locky.redis.set('lock:resource:article8', 'john');
       locky.redis.sadd(locky.set, 'lock:resource:article8');
-      locky.redis.expire('lock:resource:article8', 20);
+      locky.redis.pexpire('lock:resource:article8', 20);
+
       return locky.redis.exec()
       .then(() => {
-        locky.refresh('article8');
-
         return new Promise(resolve => {
-          setTimeout(() => resolve(true), 200);
+          setTimeout(() => resolve(true), 300);
         });
       })
       .then(() => {
         expect(spy).to.be.calledWith('article8');
+        return true;
       });
     });
   });
@@ -211,6 +219,7 @@ describe('Locky', () => {
         return locky.redis.exists('lock:resource:article10')
         .then((exists) => {
           expect(exists).to.equal(0);
+          return true;
         });
       });
     });
@@ -224,6 +233,7 @@ describe('Locky', () => {
       .then(() => locky.unlock('article11'))
       .then(() => {
         expect(spy).to.be.calledWith('article11');
+        return true;
       });
     });
 
@@ -236,6 +246,7 @@ describe('Locky', () => {
       .unlock('article12')
       .then(() => {
         expect(spy).to.not.be.called;
+        return true;
       });
     });
 
@@ -251,11 +262,12 @@ describe('Locky', () => {
       .then(() => locky.unlock('article13'))
       .then(() => {
         return new Promise(resolve => {
-          setTimeout(() => resolve(true), 200);
+          setTimeout(() => resolve(true), 300);
         });
       })
       .then(() => {
         expect(spy).to.not.be.called;
+        return true;
       });
     });
   });
@@ -273,6 +285,7 @@ describe('Locky', () => {
         return locky.getLocker('article14')
         .then(function (locker) {
           expect(locker).to.eql('john');
+          return true;
         });
       });
     });
@@ -289,6 +302,7 @@ describe('Locky', () => {
       .then(() => {
         expect(locky.redis.quit).to.be.called;
         locky = null;
+        return true;
       });
     });
   });
@@ -305,7 +319,7 @@ describe('Locky', () => {
     it('should catch error with callback', (done) => {
       const error = new Error('hello');
 
-      sinon.stub(locky.redis, 'exec')
+      sinon.stub(locky.redis, 'setnx')
       .returns(Promise.reject(error));
 
       locky.lock({ resource: 'article1', locker: 'user1' }, (err) => {
