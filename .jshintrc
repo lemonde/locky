@@ -30,6 +30,7 @@
   "debug": false,
   "eqnull": true,
   "esnext": true,
+  "-W138": true,
   "evil": false,
   "expr": false,
   "funcscope": false,
