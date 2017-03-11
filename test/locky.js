@@ -136,7 +136,7 @@ describe('Locky', () => {
         resource: 'article4',
         locker: 'john'
       })
-      .then(() => Promise.delay(300))
+      .then(() => Promise.delay(250))
       .then(() => {
         expect(spy).to.be.calledWith('article4');
         return true;
@@ -181,7 +181,7 @@ describe('Locky', () => {
       return locky.redis.setAsync('lock:resource:article8', 'john')
       .then(() => locky.redis.saddAsync(locky.set, 'lock:resource:article8'))
       .then(() => locky.redis.pexpireAsync('lock:resource:article8', 20))
-      .then(() => Promise.delay(300))
+      .then(() => Promise.delay(250))
       .then(() => {
         expect(spy).to.be.calledWith('article8');
         return true;
@@ -240,7 +240,7 @@ describe('Locky', () => {
         locker: 'john'
       })
       .then(() => locky.unlock('article13'))
-      .then(() => Promise.delay(300))
+      .then(() => Promise.delay(250))
       .then(() => {
         expect(spy).to.not.be.called;
         return true;
