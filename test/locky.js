@@ -1,7 +1,8 @@
-const redis = require('then-redis');
 const sinon = require('sinon');
 const _ = require('lodash');
+const Promise = require('bluebird');
 const expect = require('chai').use(require('sinon-chai')).expect;
+const redis = require('../lib/redis');
 const Locky = require('../lib/locky');
 
 const testRedis = redis.createClient();
@@ -9,42 +10,35 @@ const testRedis = redis.createClient();
 describe('Locky', () => {
   let createLocky, locky;
 
-  beforeEach((done) => {
-    testRedis.smembers('locky:current:locks')
-    .then((keys) => {
-      if (! keys || ! keys.length) return Promise.resolve();
-      return testRedis.del(keys);
+  beforeEach(done => {
+    testRedis.smembersAsync('locky:current:locks')
+    .then(keys => {
+      if (! keys || ! keys.length) return Promise.resolve(true);
+      return testRedis.delAsync(keys);
     })
-    .then(() => testRedis.del('locky:current:locks'))
+    .then(() => testRedis.delAsync('locky:current:locks'))
     .then(() => done())
     .catch(done);
   });
 
   beforeEach(() => {
-    createLocky = (options) => {
+    createLocky = options => {
       options = _.defaults(options || {});
       return new Locky(options);
     };
   });
 
-  afterEach(() => {
-    if (! locky) return;
-    return locky.close();
+  afterEach(done => {
+    if (!locky) return done();
+    locky.close(done);
   });
 
   describe('constructor', () => {
     describe('redis options', () => {
-      beforeEach(() => {
-        sinon.spy(redis, 'createClient');
-      });
+      beforeEach(() => sinon.spy(redis, 'createClient'));
+      afterEach(() => redis.createClient.restore());
 
-      afterEach(() => {
-        redis.createClient.restore();
-      });
-
-      it('should accept nothing', () => {
-        createLocky();
-      });
+      it('should accept nothing', () => createLocky());
 
       it('should accept an object', () => {
         createLocky({
@@ -63,12 +57,6 @@ describe('Locky', () => {
           socket_keepalive: true
         });
       });
-
-      it('should accept a function', () => {
-        createLocky({ redis: redis.createClient });
-
-        expect(redis.createClient).to.be.called;
-      });
     });
   });
 
@@ -81,14 +69,12 @@ describe('Locky', () => {
         locker: 'john'
       })
       .then(() => {
-        return locky.redis.get('lock:resource:article1').then((value) => {
-          expect(value).to.equal('john');
-        });
+        return locky.redis.getAsync('lock:resource:article1')
+        .then(value => expect(value).to.equal('john'));
       })
       .then(() => {
-        return locky.redis.ttl('lock:resource:article1').then((ttl) => {
-          expect(ttl).to.equal(-1);
-        });
+        return locky.redis.ttlAsync('lock:resource:article1')
+        .then(ttl => expect(ttl).to.equal(-1));
       });
     });
 
@@ -101,14 +87,16 @@ describe('Locky', () => {
       return locky.lock({
         resource: 'article2',
         locker: 'john'
-      }).then((res) => {
+      })
+      .then(res => {
         expect(res).to.be.true;
 
         return locky.lock({
           resource: 'article2',
           locker: 'john'
         });
-      }).then((res) => {
+      })
+      .then(res => {
         expect(locked).to.be.calledOnce;
         expect(res).to.be.false;
       });
@@ -121,11 +109,8 @@ describe('Locky', () => {
         resource: 'article3',
         locker: 'john'
       })
-      .then(() => {
-        return locky.redis.ttl('lock:resource:article3').then((ttl) => {
-          expect(ttl).to.be.most(10);
-        });
-      });
+      .then(() => locky.redis.ttlAsync('lock:resource:article3'))
+      .then(ttl => expect(ttl).to.be.most(10));
     });
 
     it('should emit an expire event when the lock expire', () => {
@@ -137,14 +122,8 @@ describe('Locky', () => {
         resource: 'article4',
         locker: 'john'
       })
-      .then(() => {
-        return new Promise(resolve => {
-          setTimeout(() => resolve(true), 200);
-        });
-      })
-      .then(() => {
-        expect(spy).to.be.calledWith('article4');
-      });
+      .then(() => Promise.delay(250))
+      .then(() => expect(spy).to.be.calledWith('article4'));
     });
 
     it('should emit a "lock" event', () => {
@@ -156,9 +135,7 @@ describe('Locky', () => {
         resource: 'article5',
         locker: 'john'
       })
-      .then(() => {
-        expect(spy).to.be.calledWith('article5', 'john');
-      });
+      .then(() => expect(spy).to.be.calledWith('article5', 'john'));
     });
   });
 
@@ -166,16 +143,11 @@ describe('Locky', () => {
     it('should refresh the ttl of a key', () => {
       locky = createLocky({ ttl: 30000 });
 
-      locky.redis.multi();
-      locky.redis.set('lock:resource:article7', 'john');
-      locky.redis.expire('lock:resource:article7', 20);
-      return locky.redis.exec()
+      return locky.redis.setAsync('lock:resource:article7', 'john')
+      .then(() => locky.redis.pexpireAsync('lock:resource:article7', 20))
       .then(() => locky.refresh('lock:resource:article7'))
-      .then(() => {
-        return locky.redis.ttl('lock:resource:article7').then((ttl) => {
-          expect(ttl).to.be.most(30);
-        });
-      });
+      .then(() => locky.redis.ttlAsync('lock:resource:article7'))
+      .then(ttl => expect(ttl).to.be.most(30));
     });
 
     it('should emit an expire event when the lock expire', () => {
@@ -183,21 +155,11 @@ describe('Locky', () => {
       locky = createLocky({ ttl: 100 });
       locky.on('expire', spy);
 
-      locky.redis.multi();
-      locky.redis.set('lock:resource:article8', 'john');
-      locky.redis.sadd(locky.set, 'lock:resource:article8');
-      locky.redis.expire('lock:resource:article8', 20);
-      return locky.redis.exec()
-      .then(() => {
-        locky.refresh('article8');
-
-        return new Promise(resolve => {
-          setTimeout(() => resolve(true), 200);
-        });
-      })
-      .then(() => {
-        expect(spy).to.be.calledWith('article8');
-      });
+      return locky.redis.setAsync('lock:resource:article8', 'john')
+      .then(() => locky.redis.saddAsync(locky.set, 'lock:resource:article8'))
+      .then(() => locky.redis.pexpireAsync('lock:resource:article8', 20))
+      .then(() => Promise.delay(250))
+      .then(() => expect(spy).to.be.calledWith('article8'));
     });
   });
 
@@ -205,14 +167,10 @@ describe('Locky', () => {
     it('should remove the key', () => {
       locky = createLocky();
 
-      return locky.redis.set('lock:resource:article10', 'john')
+      return locky.redis.setAsync('lock:resource:article10', 'john')
       .then(() => locky.unlock('article10'))
-      .then(() => {
-        return locky.redis.exists('lock:resource:article10')
-        .then((exists) => {
-          expect(exists).to.equal(0);
-        });
-      });
+      .then(() => locky.redis.existsAsync('lock:resource:article10'))
+      .then(exists => expect(exists).to.equal(0));
     });
 
     it('should emit a "unlock" event', () => {
@@ -220,11 +178,9 @@ describe('Locky', () => {
       locky = createLocky();
       locky.on('unlock', spy);
 
-      return locky.redis.set('lock:resource:article11', 'john')
+      return locky.redis.setAsync('lock:resource:article11', 'john')
       .then(() => locky.unlock('article11'))
-      .then(() => {
-        expect(spy).to.be.calledWith('article11');
-      });
+      .then(() => expect(spy).to.be.calledWith('article11'));
     });
 
     it('should not emit a "unlock" event if the resource is not locked', () => {
@@ -232,11 +188,8 @@ describe('Locky', () => {
       locky = createLocky();
       locky.on('unlock', spy);
 
-      return locky
-      .unlock('article12')
-      .then(() => {
-        expect(spy).to.not.be.called;
-      });
+      return locky.unlock('article12')
+      .then(() => expect(spy).to.not.be.called);
     });
 
     it('should not expire if we "unlock"', () => {
@@ -249,14 +202,8 @@ describe('Locky', () => {
         locker: 'john'
       })
       .then(() => locky.unlock('article13'))
-      .then(() => {
-        return new Promise(resolve => {
-          setTimeout(() => resolve(true), 200);
-        });
-      })
-      .then(() => {
-        expect(spy).to.not.be.called;
-      });
+      .then(() => Promise.delay(250))
+      .then(() => expect(spy).to.not.be.called);
     });
   });
 
@@ -264,17 +211,12 @@ describe('Locky', () => {
     it('should return the locker', () => {
       locky = createLocky();
 
-      return locky
-      .lock({
+      return locky.lock({
         resource: 'article14',
         locker: 'john'
       })
-      .then(() => {
-        return locky.getLocker('article14')
-        .then(function (locker) {
-          expect(locker).to.eql('john');
-        });
-      });
+      .then(() => locky.getLocker('article14'))
+      .then(locker => expect(locker).to.eql('john'));
     });
   });
 
@@ -289,6 +231,40 @@ describe('Locky', () => {
       .then(() => {
         expect(locky.redis.quit).to.be.called;
         locky = null;
+        return true;
+      });
+    });
+  });
+
+  describe('#procedure', () => {
+    it('should passed without inconsistency', () => {
+      locky = createLocky({ ttl: 100 });
+
+      return locky.lock({
+        resource: 'article2',
+        locker: 'john'
+      })
+      .then(() => Promise.delay(250))
+      .then(() => locky.lock({
+        resource: 'article1',
+        locker: 'john'
+      }))
+      .then(() => locky.unlock('article1'))
+      .then(() => locky.lock({
+        resource: 'article1',
+        locker: 'ryan'
+      }))
+      .then(() => locky.lock({
+        resource: 'article1',
+        locker: 'john'
+      }))
+      .then(() => locky.redis.smembersAsync(locky.set))
+      .then(locks => {
+        expect(locks).to.eql(['lock:resource:article1']);
+        return locky.getLocker('article1');
+      })
+      .then(locker => {
+        expect(locker).to.equal('ryan');
       });
     });
   });
@@ -298,18 +274,19 @@ describe('Locky', () => {
       locky = createLocky();
     });
 
-    it('should work with callback', (done) => {
+    it('should work with callback', done => {
       locky.lock({ resource: 'article1', locker: 'user1' }, done);
     });
 
-    it('should catch error with callback', (done) => {
+    // https://github.com/petkaantonov/bluebird/issues/695
+    // passed but skipped cause rejection error is on the output
+    it.skip('should catch error with callback', done => {
       const error = new Error('hello');
 
-      sinon.stub(locky.redis, 'exec')
-      .returns(Promise.reject(error));
+      sinon.stub(locky.redis, 'setnxAsync').returns(Promise.reject(error));
 
-      locky.lock({ resource: 'article1', locker: 'user1' }, (err) => {
-        expect(err).to.equal(error);
+      locky.lock({ resource: 'article1', locker: 'user1' }, err => {
+        expect(err).to.eql(error);
         done();
       });
     });
