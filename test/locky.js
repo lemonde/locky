@@ -223,13 +223,13 @@ describe('Locky', () => {
   describe('#close', () => {
     beforeEach(() => {
       locky = createLocky();
-      sinon.spy(locky.redis, 'quit');
+      sinon.spy(locky.redis, 'end');
     });
 
     it('should close the redis connection', () => {
       return locky.close()
       .then(() => {
-        expect(locky.redis.quit).to.be.called;
+        expect(locky.redis.end).to.be.called;
         locky = null;
         return true;
       });
