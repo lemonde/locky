@@ -1,7 +1,6 @@
 # locky
-[![Build Status](https://travis-ci.org/neoziro/locky.svg?branch=master)](https://travis-ci.org/neoziro/locky)
-[![Dependency Status](https://david-dm.org/neoziro/locky.svg?theme=shields.io)](https://david-dm.org/neoziro/locky)
-[![devDependency Status](https://david-dm.org/neoziro/locky/dev-status.svg?theme=shields.io)](https://david-dm.org/neoziro/locky#info=devDependencies)
+
+![Node.js CI](https://github.com/lemonde/locky/workflows/Node.js%20CI/badge.svg)
 
 Fast resource locking system based on redis.
 
@@ -14,71 +13,68 @@ npm install locky
 ## Usage
 
 ```js
-var Locky = require('locky');
+import redis from "redis";
+import { createClient } from "locky";
 
 // Create a new locky client.
-var locky = new Locky();
+const locky = createClient({ redis: () => redis.createClient() });
 
 // Lock the resource 'article:12' with the locker 20.
-locky.lock('article:12', 20).then(...);
+await locky.lock("article:12", 20);
 
 // Refresh the lock TTL of the resource 'article:12'.
-locky.refresh('article:12').then(...);
+await locky.refresh("article:12");
 
 // Unlock the resource 'article:12.
-locky.unlock('article:12').then(...);
+await locky.unlock("article:12");
 
 // Get the locker of the resource 'article:12'.
-locky.getLocker('article:12').then(...);
+await locky.getLocker("article:12");
 ```
 
-### new Locky(options)
+### createClient(options)
 
 Create a new locky client with some options.
 
 #### redis
 
-Type: `Object` or `Function`
+Type: `import('redis').ClientOpts | (() => import('redis').RedisClient)`
 
 If you specify an **object**, the properties will be used to call `redis.createClient` method.
 
 ```js
-new Locky({
+createClient({
   redis: {
     port: 6379,
-    host: '127.0.0.1',
-    connect_timeout: 200
-  }
-})
+    host: "127.0.0.1",
+    connect_timeout: 200,
+  },
+});
 ```
 
 If you specify a **function**, it will be called to create redis clients.
 
 ```js
-var redis = require('redis');
+import redis from "redis";
 
-new Locky({
-  redis: createClient
-})
-
-function createClient() {
-  var client = redis.createClient();
-  client.select(1); // Choose a custom database.
-  return client;
-}
+createClient({
+  redis: () => redis.createClient(),
+});
 ```
 
 #### ttl
 
-Type: `Number`
+Type: `number`
 
 Define the expiration time of the lock in ms. Defaults to `null` (no expiration).
 
 ```js
-new Locky({
-  ttl: 2000
-})
+const locky = createClient({ ttl: 2000 });
 ```
+
+### locky.startExpirateWorker()
+
+Start an expiration worker, it means locky will emit "expire" events.
 
 ### locky.lock(options, [callback])
 
@@ -88,30 +84,29 @@ If the resource was already locked,
 you can't lock it but by passing `force: true`.
 
 ```js
-locky.lock({
-  resource: 'article:23',
+const locked = await locky.lock({
+  resource: "article:23",
   locker: 20,
-  force: false
-}).then(function (locked) {
-  console.log(locked); // true the lock has been taken
+  force: false,
 });
+// `locked` is `true` if lock has been taken, `false` if not
 ```
 
 #### resource
 
-Type: `String` | `Number`
+Type: `string | number`
 
 Which resource would you like to lock.
 
 #### locker
 
-Type: `String` | `Number`
+Type: `string | number`
 
 Which locker should lock the resource, can by any string.
 
 #### force
 
-Type: `Boolean`
+Type: `boolean`
 
 Should we take a lock if it's already locked?
 
@@ -149,7 +144,9 @@ locky.getLocker('article:23').then(...);
 Emitted when a resource is locked.
 
 ```js
-locky.on('lock', function (resource, locker) { ... });
+locky.on("lock", (resource, locker) => {
+  /* ... */
+});
 ```
 
 #### "unlock"
@@ -157,7 +154,9 @@ locky.on('lock', function (resource, locker) { ... });
 Emitted when a resource is unlocked.
 
 ```js
-locky.on('unlock', function (resource) { ... });
+locky.on("unlock", (resource) => {
+  /* ... */
+});
 ```
 
 #### "expire"
@@ -165,7 +164,9 @@ locky.on('unlock', function (resource) { ... });
 Emitted when the lock on a resource has expired.
 
 ```js
-locky.on('expire', function (resource) { ... });
+locky.on("expire", (resource) => {
+  /* ... */
+});
 ```
 
 ## License
