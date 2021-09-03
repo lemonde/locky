@@ -72,6 +72,16 @@ Define the expiration time of the lock in ms. Defaults to `null` (no expiration)
 const locky = createClient({ ttl: 2000 });
 ```
 
+#### prefix
+
+Type: `string`, default: `"locky:"`
+
+Define the prefix of every keys used by locky.
+
+```js
+const locky = createClient({ prefix: "something:" });
+```
+
 ### locky.startExpirateWorker()
 
 Start an expiration worker, it means locky will emit "expire" events.
