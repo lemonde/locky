@@ -52,8 +52,8 @@ describe("Locky", () => {
       expect(res).toBe(true);
       const batch = testRedis
         .batch()
-        .get("lock:resource:article1")
-        .ttl("lock:resource:article1");
+        .get("locky:lock:article1")
+        .ttl("locky:lock:article1");
       const [value, ttl] = await promisify(batch.exec.bind(batch))();
 
       expect(value).toBe("john");
@@ -116,7 +116,7 @@ describe("Locky", () => {
       });
       expect(res).toBe(true);
 
-      const ttl = await testRedis.ttlAsync("lock:resource:article3");
+      const ttl = await testRedis.ttlAsync("locky:lock:article3");
       expect(ttl).toBeLessThanOrEqual(10);
     });
   });
@@ -144,15 +144,15 @@ describe("Locky", () => {
       locky = createLocky({ ttl: 30000 });
 
       const trx = testRedis.multi();
-      trx.set("lock:resource:article7", "john");
-      trx.pexpire("lock:resource:article7", 20000);
+      trx.set("locky:lock:article7", "john");
+      trx.pexpire("locky:lock:article7", 20000);
       await promisify(trx.exec.bind(trx))();
 
       const res = await locky.refresh("article7");
 
       expect(res).toBe(true);
 
-      const ttl = await testRedis.ttlAsync("lock:resource:article7");
+      const ttl = await testRedis.ttlAsync("locky:lock:article7");
 
       expect(ttl).toBeLessThanOrEqual(30);
     });
@@ -162,13 +162,13 @@ describe("Locky", () => {
     it("removes the key", async () => {
       locky = createLocky();
 
-      await testRedis.setAsync("lock:resource:article10", "john");
+      await testRedis.setAsync("locky:lock:article10", "john");
 
       const res = await locky.unlock("article10");
 
       expect(res).toBe(true);
 
-      const exists = await testRedis.existsAsync("lock:resource:article10");
+      const exists = await testRedis.existsAsync("locky:lock:article10");
       expect(exists).toBe(0);
     });
 
@@ -178,7 +178,7 @@ describe("Locky", () => {
       const handleUnlock = jest.fn();
       locky.on("unlock", handleUnlock);
 
-      await testRedis.setAsync("lock:resource:article11", "john");
+      await testRedis.setAsync("locky:lock:article11", "john");
 
       const res = await locky.unlock("article11");
 
