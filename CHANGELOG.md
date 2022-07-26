@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+### [4.0.1](https://github.com/lemonde/locky/compare/v4.0.0...v4.0.1) (2022-07-26)
+
+
+### Bug Fixes
+
+* **worker:** fix worker lock algorithm ([ccf24ef](https://github.com/lemonde/locky/commit/ccf24efa2b3582ffef88badd98e6eda331ba8f94))
+
 ## [4.0.0](https://github.com/lemonde/locky/compare/v3.0.0...v4.0.0) (2021-09-03)
 
 
