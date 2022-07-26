@@ -39,13 +39,13 @@ jobs:
           node-version: ${{ matrix.node-version }}
 
       - name: Install dependencies
-        run: yarn --frozen-lockfile
+        run: npm ci
 
       - name: Check types
-        run: yarn tsc --noEmit
+        run: npx tsc --noEmit
 
       - name: Run tests
-        run: yarn test
+        run: npm test
         env:
           # The hostname used to communicate with the Redis service container
           REDIS_HOST: redis
