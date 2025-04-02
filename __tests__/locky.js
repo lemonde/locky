@@ -1,12 +1,13 @@
-const { promisify } = require("util");
 const redis = require("redis");
 const locky = require("../lib/locky");
 
 const createLocky = (options = {}) => {
   return locky.createClient({
     redis: {
-      host: process.env.REDIS_HOST ?? undefined,
-      port: process.env.REDIS_PORT ?? undefined,
+      socket: {
+        host: process.env.REDIS_HOST ?? undefined,
+        port: process.env.REDIS_PORT ?? undefined,
+      },
     },
     ...options,
   });
@@ -20,30 +21,28 @@ describe("Locky", () => {
     locky = null;
 
     testRedis = redis.createClient({
-      host: process.env.REDIS_HOST ?? undefined,
-      port: process.env.REDIS_PORT ?? undefined,
+      socket: {
+        host: process.env.REDIS_HOST ?? undefined,
+        port: process.env.REDIS_PORT ?? undefined,
+      },
     });
-    testRedis.setAsync = promisify(testRedis.set.bind(testRedis));
-    testRedis.smembersAsync = promisify(testRedis.smembers.bind(testRedis));
-    testRedis.delAsync = promisify(testRedis.del.bind(testRedis));
-    testRedis.ttlAsync = promisify(testRedis.ttl.bind(testRedis));
-    testRedis.existsAsync = promisify(testRedis.exists.bind(testRedis));
-    testRedis.quitAsync = promisify(testRedis.quit.bind(testRedis));
 
-    const keys = await testRedis.smembersAsync("locky:current:locks");
-    await testRedis.delAsync([...keys, "locky:current:locks"]);
+    await testRedis.connect();
+
+    const keys = await testRedis.sMembers("locky:current:locks");
+    await testRedis.del([...keys, "locky:current:locks"]);
   });
 
   afterEach(async () => {
     if (locky) {
       await locky.close();
     }
-    await testRedis.quitAsync();
+    await testRedis.quit();
   });
 
   describe("#lock", () => {
     it("locks", async () => {
-      locky = createLocky();
+      locky = await createLocky();
 
       const res = await locky.lock({
         resource: "article1",
@@ -51,17 +50,17 @@ describe("Locky", () => {
       });
       expect(res).toBe(true);
       const batch = testRedis
-        .batch()
+        .multi()
         .get("locky:lock:article1")
         .ttl("locky:lock:article1");
-      const [value, ttl] = await promisify(batch.exec.bind(batch))();
+      const [value, ttl] = await batch.exec();
 
       expect(value).toBe("john");
       expect(ttl).toBe(-1);
     });
 
     it("does not lock if already locked by another resource", async () => {
-      locky = createLocky();
+      locky = await createLocky();
 
       const handleLock = jest.fn();
       locky.on("lock", handleLock);
@@ -83,7 +82,7 @@ describe("Locky", () => {
     });
 
     it("locks if already locked by another resource and forced", async () => {
-      locky = createLocky();
+      locky = await createLocky();
 
       const handleLock = jest.fn();
       locky.on("lock", handleLock);
@@ -108,7 +107,7 @@ describe("Locky", () => {
     });
 
     it("sets the correct ttl", async () => {
-      locky = createLocky({ ttl: 10000 });
+      locky = await createLocky({ ttl: 10000 });
 
       const res = await locky.lock({
         resource: "article3",
@@ -116,7 +115,7 @@ describe("Locky", () => {
       });
       expect(res).toBe(true);
 
-      const ttl = await testRedis.ttlAsync("locky:lock:article3");
+      const ttl = await testRedis.ttl("locky:lock:article3");
       expect(ttl).toBeLessThanOrEqual(10);
     });
   });
@@ -124,7 +123,7 @@ describe("Locky", () => {
   describe("#startExpireWorker", () => {
     it("emits an expire event when the lock expire", async () => {
       const handleExpire = jest.fn();
-      locky = createLocky({ ttl: 100 });
+      locky = await createLocky({ ttl: 100 });
       locky.on("expire", handleExpire);
       locky.startExpirateWorker();
 
@@ -141,18 +140,18 @@ describe("Locky", () => {
 
   describe("#refresh", () => {
     it("refreshes the ttl of a key", async () => {
-      locky = createLocky({ ttl: 30000 });
+      locky = await createLocky({ ttl: 30000 });
 
       const trx = testRedis.multi();
       trx.set("locky:lock:article7", "john");
-      trx.pexpire("locky:lock:article7", 20000);
-      await promisify(trx.exec.bind(trx))();
+      trx.pExpire("locky:lock:article7", 20000);
+      await trx.exec();
 
       const res = await locky.refresh("article7");
 
       expect(res).toBe(true);
 
-      const ttl = await testRedis.ttlAsync("locky:lock:article7");
+      const ttl = await testRedis.ttl("locky:lock:article7");
 
       expect(ttl).toBeLessThanOrEqual(30);
     });
@@ -160,25 +159,25 @@ describe("Locky", () => {
 
   describe("#unlock", () => {
     it("removes the key", async () => {
-      locky = createLocky();
+      locky = await createLocky();
 
-      await testRedis.setAsync("locky:lock:article10", "john");
+      await testRedis.set("locky:lock:article10", "john");
 
       const res = await locky.unlock("article10");
 
       expect(res).toBe(true);
 
-      const exists = await testRedis.existsAsync("locky:lock:article10");
+      const exists = await testRedis.exists("locky:lock:article10");
       expect(exists).toBe(0);
     });
 
     it('emits a "unlock" event', async () => {
-      locky = createLocky();
+      locky = await createLocky();
 
       const handleUnlock = jest.fn();
       locky.on("unlock", handleUnlock);
 
-      await testRedis.setAsync("locky:lock:article11", "john");
+      await testRedis.set("locky:lock:article11", "john");
 
       const res = await locky.unlock("article11");
 
@@ -189,7 +188,7 @@ describe("Locky", () => {
     });
 
     it('does not emit a "unlock" event if the resource is not locked', async () => {
-      locky = createLocky();
+      locky = await createLocky();
 
       const handleUnlock = jest.fn();
       locky.on("unlock", handleUnlock);
@@ -201,7 +200,7 @@ describe("Locky", () => {
     });
 
     it('does not expire if we "unlock"', async () => {
-      locky = createLocky({ ttl: 300 });
+      locky = await createLocky({ ttl: 300 });
 
       const handleExpire = jest.fn();
       locky.on("expire", handleExpire);
@@ -222,7 +221,7 @@ describe("Locky", () => {
 
   describe("#getLocker", () => {
     it("returns locker", async () => {
-      locky = createLocky();
+      locky = await createLocky();
 
       await locky.lock({
         resource: "article14",
