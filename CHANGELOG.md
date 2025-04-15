@@ -2,6 +2,16 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+## [5.0.0](https://github.com/lemonde/locky/compare/v4.0.1...v5.0.0) (2025-04-15)
+
+
+### ⚠ BREAKING CHANGES
+
+* **redis:**     - `createClient()` is now async
+    - redis configuration object must follow [node-redis@v4](https://github.com/redis/node-redis/blob/master/docs/v3-to-v4.md#createclient)
+
+* **redis:** use redis@4.7.0 ([d82f029](https://github.com/lemonde/locky/commit/d82f02945d646d2bda6972203839ba67ec2ed0a9))
+
 ### [4.0.1](https://github.com/lemonde/locky/compare/v4.0.0...v4.0.1) (2022-07-26)
 
 
