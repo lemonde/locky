@@ -17,7 +17,7 @@ import redis from "redis";
 import { createClient } from "locky";
 
 // Create a new locky client.
-const locky = createClient({ redis: () => redis.createClient() });
+const locky = await createClient({ redis: () => redis.createClient() });
 
 // Lock the resource 'article:12' with the locker 20.
 await locky.lock("article:12", 20);
@@ -43,7 +43,7 @@ Type: `import('redis').ClientOpts | (() => import('redis').RedisClient)`
 If you specify an **object**, the properties will be used to call `redis.createClient` method.
 
 ```js
-createClient({
+await createClient({
   redis: {
     port: 6379,
     host: "127.0.0.1",
@@ -57,7 +57,7 @@ If you specify a **function**, it will be called to create redis clients.
 ```js
 import redis from "redis";
 
-createClient({
+await createClient({
   redis: () => redis.createClient(),
 });
 ```
@@ -69,7 +69,7 @@ Type: `number`
 Define the expiration time of the lock in ms. Defaults to `null` (no expiration).
 
 ```js
-const locky = createClient({ ttl: 2000 });
+const locky = await createClient({ ttl: 2000 });
 ```
 
 #### prefix
@@ -79,7 +79,7 @@ Type: `string`, default: `"locky:"`
 Define the prefix of every keys used by locky.
 
 ```js
-const locky = createClient({ prefix: "something:" });
+const locky = await createClient({ prefix: "something:" });
 ```
 
 ### locky.startExpirateWorker()
