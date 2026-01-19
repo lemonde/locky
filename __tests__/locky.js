@@ -37,7 +37,7 @@ describe("Locky", () => {
     if (locky) {
       await locky.close();
     }
-    await testRedis.quit();
+    await testRedis.close();
   });
 
   describe("#lock", () => {
