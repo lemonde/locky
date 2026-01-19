@@ -20,10 +20,10 @@
     "standard-version": "^9.5.0",
     "typescript": "^4.7.4"
   },
-  "dependencies": {
-    "redis": "^4.7.0"
-  },
   "engines": {
     "node": ">= 12.9.0"
+  },
+  "dependencies": {
+    "redis": "^5.10.0"
   }
 }
